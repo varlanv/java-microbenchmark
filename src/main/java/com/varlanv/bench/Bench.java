@@ -1,5 +1,7 @@
-package impl;
+package com.varlanv.bench;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -84,29 +86,61 @@ public final class Bench {
         }
 
         public Map<String, Result> run() {
+            int iterations = 1_000_000;
+
+            // Measure time for the loop with nanoTime() calls
+            long startTimeWithNano = System.nanoTime();
+            for (int i = 0; i < iterations; i++) {
+                System.nanoTime();
+            }
+            long endTimeWithNano = System.nanoTime();
+            long totalTimeWithNano = endTimeWithNano - startTimeWithNano;
+
+            // Measure time for an empty loop
+            long startTimeEmptyLoop = System.nanoTime();
+            for (int i = 0; i < iterations; i++) {
+                // Empty loop
+            }
+            long endTimeEmptyLoop = System.nanoTime();
+            long totalTimeEmptyLoop = endTimeEmptyLoop - startTimeEmptyLoop;
+
+            // Estimate the overhead of System.nanoTime() calls
+            long nanoTimeOnly = totalTimeWithNano - totalTimeEmptyLoop;
+            double averageNanoTime = (double) nanoTimeOnly / iterations;
+
             Collection<Spec> specs = subjects.values();
             Map<String, Result> results = new LinkedHashMap<>();
             try {
                 for (Spec spec : specs) {
+                    ThrowingRunnable action = spec.action();
+                    ThrowingRunnable cleanup = spec.extended().cleanup;
                     for (long warmup = 0; warmup < spec.warmupCycles(); warmup++) {
-                        spec.action().run();
+                        action.run();
+                        cleanup.run();
                     }
                 }
                 for (Spec spec : specs) {
-                    System.gc();
-                    Result result = results.computeIfAbsent(spec.name(), k -> new Result());
+                    double average = 0.0;
+                    long min = 0;
+                    long max = 0;
                     ThrowingRunnable action = spec.action();
                     ThrowingRunnable cleanup = spec.extended().cleanup;
                     for (long iteration = 0; iteration < spec.iterationCycles(); iteration++) {
                         long nanoBefore = System.nanoTime();
                         action.run();
                         long nanoAfter = System.nanoTime();
-                        result.average += (nanoAfter - nanoBefore);
-                        result.min = Math.min(result.min, nanoAfter - nanoBefore);
-                        result.max = Math.max(result.max, nanoAfter - nanoBefore);
+                        average += (nanoAfter - nanoBefore);
+                        min = Math.min(min, nanoAfter - nanoBefore);
+                        max = Math.max(max, nanoAfter - nanoBefore);
                         cleanup.run();
                     }
-                    result.average /= spec.iterationCycles();
+                    results.put(
+                            spec.name(),
+                            new Result(
+                                    BigDecimal.valueOf(average / spec.iterationCycles() - averageNanoTime).setScale(2, RoundingMode.HALF_UP),
+                                    min,
+                                    max
+                            ));
                 }
             } catch (Throwable e) {
                 throw hide(e);
@@ -257,20 +291,17 @@ public final class Bench {
 
     public static final class Result {
 
-        private long average;
-        private long min;
-        private long max;
+        private final BigDecimal average;
+        private final long min;
+        private final long max;
 
-        @Override
-        public String toString() {
-            return "Result{" +
-                    "average=" + average +
-                    ", min=" + min +
-                    ", max=" + max +
-                    '}';
+        public Result(BigDecimal average, long min, long max) {
+            this.average = average;
+            this.min = min;
+            this.max = max;
         }
 
-        public long average() {
+        public BigDecimal average() {
             return average;
         }
 
@@ -283,12 +314,21 @@ public final class Bench {
         }
 
         @Override
+        public String toString() {
+            return "Result{" +
+                    "average=" + average +
+                    ", min=" + min +
+                    ", max=" + max +
+                    '}';
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (!(o instanceof Result)) {
                 return false;
             }
             Result result = (Result) o;
-            return average == result.average && min == result.min && max == result.max;
+            return min == result.min && max == result.max && Objects.equals(average, result.average);
         }
 
         @Override
