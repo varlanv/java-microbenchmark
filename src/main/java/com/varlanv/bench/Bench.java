@@ -315,11 +315,24 @@ public final class Bench {
 
         @Override
         public String toString() {
-            return "Result{" +
-                    "average=" + average +
-                    ", min=" + min +
-                    ", max=" + max +
-                    '}';
+            return String.format("average -> %s, min -> %s, max -> %s",
+                    formatTime(average), formatTime(BigDecimal.valueOf(min)), formatTime(BigDecimal.valueOf(max)));
+        }
+
+        private String formatTime(BigDecimal average) {
+            if (average.compareTo(BigDecimal.valueOf(1000)) < 0) {
+                // If less than 1000 ns, display in nanoseconds
+                return average.toPlainString() + "ns";
+            } else if (average.compareTo(BigDecimal.valueOf(1_000_000)) < 0) {
+                // If between 1000 ns and 1_000_000 ns, display in microseconds
+                return average.divide(BigDecimal.valueOf(1000), 2, RoundingMode.HALF_UP).toPlainString() + "μs";
+            } else if (average.compareTo(BigDecimal.valueOf(1_000_000_000)) < 0) {
+                // If between 1_000_000 ns and 1_000_000_000 ns, display in milliseconds
+                return average.divide(BigDecimal.valueOf(1_000_000), 2, RoundingMode.HALF_UP).toPlainString() + "ms";
+            } else {
+                // If greater than or equal to 1_000_000_000 ns, display in seconds
+                return average.divide(BigDecimal.valueOf(1_000_000_000), 2, RoundingMode.HALF_UP).toPlainString() + "s";
+            }
         }
 
         @Override
