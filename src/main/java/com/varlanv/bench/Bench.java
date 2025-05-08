@@ -121,7 +121,7 @@ public final class Bench {
                 }
                 for (Spec spec : specs) {
                     double average = 0.0;
-                    long min = 0;
+                    long min = -1;
                     long max = 0;
                     ThrowingRunnable action = spec.action();
                     ThrowingRunnable cleanup = spec.extended().cleanup;
@@ -130,7 +130,7 @@ public final class Bench {
                         action.run();
                         long nanoAfter = System.nanoTime();
                         average += (nanoAfter - nanoBefore);
-                        min = Math.min(min, nanoAfter - nanoBefore);
+                        min = min == -1 ? nanoAfter - nanoBefore : Math.min(min, nanoAfter - nanoBefore);
                         max = Math.max(max, nanoAfter - nanoBefore);
                         cleanup.run();
                     }
